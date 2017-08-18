@@ -37,6 +37,8 @@ import java.security.PublicKey;
 
 /**
  * @author <a href="mailto:bill@burkecentral.com">Bill Burke</a>
+ * @author <a href="mailto:brad.culley@spartasystems.com">Brad Culley</a>
+ * @author <a href="mailto:john.ament@spartasystems.com">John D. Ament</a>
  * @version $Revision: 1 $
  */
 public class KeycloakDeploymentBuilder {
@@ -96,6 +98,7 @@ public class KeycloakDeploymentBuilder {
             deployment.setCorsMaxAge(adapterConfig.getCorsMaxAge());
             deployment.setCorsAllowedHeaders(adapterConfig.getCorsAllowedHeaders());
             deployment.setCorsAllowedMethods(adapterConfig.getCorsAllowedMethods());
+            deployment.setCorsExposedHeaders(adapterConfig.getCorsExposedHeaders());
         }
 
         // https://tools.ietf.org/html/rfc7636
@@ -112,6 +115,8 @@ public class KeycloakDeploymentBuilder {
         deployment.setTokenMinimumTimeToLive(adapterConfig.getTokenMinimumTimeToLive());
         deployment.setMinTimeBetweenJwksRequests(adapterConfig.getMinTimeBetweenJwksRequests());
         deployment.setPublicKeyCacheTtl(adapterConfig.getPublicKeyCacheTtl());
+        deployment.setIgnoreOAuthQueryParameter(adapterConfig.isIgnoreOAuthQueryParameter());
+        deployment.setRewriteRedirectRules(adapterConfig.getRedirectRewriteRules());
 
         if (realmKeyPem == null && adapterConfig.isBearerOnly() && adapterConfig.getAuthServerUrl() == null) {
             throw new IllegalArgumentException("For bearer auth, you must set the realm-public-key or auth-server-url");

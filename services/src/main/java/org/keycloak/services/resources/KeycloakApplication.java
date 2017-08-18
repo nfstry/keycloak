@@ -47,6 +47,7 @@ import org.keycloak.services.managers.ApplianceBootstrap;
 import org.keycloak.services.managers.RealmManager;
 import org.keycloak.services.managers.UserStorageSyncManager;
 import org.keycloak.services.resources.admin.AdminRoot;
+import org.keycloak.services.scheduled.ClearExpiredClientInitialAccessTokens;
 import org.keycloak.services.scheduled.ClearExpiredEvents;
 import org.keycloak.services.scheduled.ClearExpiredUserSessions;
 import org.keycloak.services.scheduled.ClusterAwareScheduledTaskRunner;
@@ -70,11 +71,14 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
 import java.net.URL;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.StringTokenizer;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * @author <a href="mailto:bill@burkecentral.com">Bill Burke</a>
@@ -87,6 +91,8 @@ public class KeycloakApplication extends Application {
     public static final String KEYCLOAK_CONFIG_PARAM_NAME = "org.keycloak.server-subsystem.Config";
 
     public static final String KEYCLOAK_EMBEDDED = "keycloak.embedded";
+
+    public static final String SERVER_CONTEXT_CONFIG_PROPERTY_OVERRIDES = "keycloak.server.context.config.property-overrides";
 
     private static final Logger logger = Logger.getLogger(KeycloakApplication.class);
 
@@ -148,20 +154,20 @@ public class KeycloakApplication extends Application {
                 exportImportManager[0].runExport();
             }
 
-            boolean bootstrapAdminUser = false;
-            KeycloakSession session = sessionFactory.create();
-            try {
-                session.getTransactionManager().begin();
-                bootstrapAdminUser = new ApplianceBootstrap(session).isNoMasterUser();
+            AtomicBoolean bootstrapAdminUser = new AtomicBoolean(false);
+            KeycloakModelUtils.runJobInTransaction(sessionFactory, new KeycloakSessionTask() {
 
-                session.getTransactionManager().commit();
-            } finally {
-                session.close();
-            }
+                @Override
+                public void run(KeycloakSession session) {
+                    boolean shouldBootstrapAdmin = new ApplianceBootstrap(session).isNoMasterUser();
+                    bootstrapAdminUser.set(shouldBootstrapAdmin);
 
-            sessionFactory.publish(new PostMigrationEvent());
+                    sessionFactory.publish(new PostMigrationEvent(session));
+                }
 
-            singletons.add(new WelcomeResource(bootstrapAdminUser));
+            });
+
+            singletons.add(new WelcomeResource(bootstrapAdminUser.get()));
 
             setupScheduledTasks(sessionFactory);
         } catch (Throwable t) {
@@ -262,7 +268,7 @@ public class KeycloakApplication extends Application {
     public static void loadConfig(ServletContext context) {
         try {
             JsonNode node = null;
-            
+
             String dmrConfig = loadDmrConfig(context);
             if (dmrConfig != null) {
                 node = new ObjectMapper().readTree(dmrConfig);
@@ -287,7 +293,13 @@ public class KeycloakApplication extends Application {
             }
 
             if (node != null) {
-                Properties properties = new SystemEnvProperties();
+                Map<String, String> propertyOverridesMap = new HashMap<>();
+                String propertyOverrides = context.getInitParameter(SERVER_CONTEXT_CONFIG_PROPERTY_OVERRIDES);
+                if (context.getInitParameter(SERVER_CONTEXT_CONFIG_PROPERTY_OVERRIDES) != null) {
+                    JsonNode jsonObj = new ObjectMapper().readTree(propertyOverrides);
+                    jsonObj.fields().forEachRemaining(e -> propertyOverridesMap.put(e.getKey(), e.getValue().asText()));
+                }
+                Properties properties = new SystemEnvProperties(propertyOverridesMap);
                 Config.init(new JsonConfigProvider(node, properties));
             } else {
                 throw new RuntimeException("Keycloak config not found.");
@@ -321,6 +333,7 @@ public class KeycloakApplication extends Application {
         try {
             TimerProvider timer = session.getProvider(TimerProvider.class);
             timer.schedule(new ClusterAwareScheduledTaskRunner(sessionFactory, new ClearExpiredEvents(), interval), interval, "ClearExpiredEvents");
+            timer.schedule(new ClusterAwareScheduledTaskRunner(sessionFactory, new ClearExpiredClientInitialAccessTokens(), interval), interval, "ClearExpiredClientInitialAccessTokens");
             timer.schedule(new ScheduledTaskRunner(sessionFactory, new ClearExpiredUserSessions()), interval, "ClearExpiredUserSessions");
             new UserStorageSyncManager().bootstrapPeriodic(sessionFactory, timer);
         } finally {

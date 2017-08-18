@@ -46,6 +46,8 @@ public class RealmRepresentation {
     protected Integer accessCodeLifespan;
     protected Integer accessCodeLifespanUserAction;
     protected Integer accessCodeLifespanLogin;
+    protected Integer actionTokenGeneratedByAdminLifespan;
+    protected Integer actionTokenGeneratedByUserLifespan;
     protected Boolean enabled;
     protected String sslRequired;
     @Deprecated
@@ -66,6 +68,7 @@ public class RealmRepresentation {
 
     //--- brute force settings
     protected Boolean bruteForceProtected;
+    protected Boolean permanentLockout;
     protected Integer maxFailureWaitSeconds;
     protected Integer minimumQuickLoginWaitSeconds;
     protected Integer waitIncrementSeconds;
@@ -134,6 +137,7 @@ public class RealmRepresentation {
     protected String directGrantFlow;
     protected String resetCredentialsFlow;
     protected String clientAuthenticationFlow;
+    protected String dockerAuthenticationFlow;
 
     protected Map<String, String> attributes;
 
@@ -335,6 +339,22 @@ public class RealmRepresentation {
 
     public void setAccessCodeLifespanLogin(Integer accessCodeLifespanLogin) {
         this.accessCodeLifespanLogin = accessCodeLifespanLogin;
+    }
+
+    public Integer getActionTokenGeneratedByAdminLifespan() {
+        return actionTokenGeneratedByAdminLifespan;
+    }
+
+    public void setActionTokenGeneratedByAdminLifespan(Integer actionTokenGeneratedByAdminLifespan) {
+        this.actionTokenGeneratedByAdminLifespan = actionTokenGeneratedByAdminLifespan;
+    }
+
+    public Integer getActionTokenGeneratedByUserLifespan() {
+        return actionTokenGeneratedByUserLifespan;
+    }
+
+    public void setActionTokenGeneratedByUserLifespan(Integer actionTokenGeneratedByUserLifespan) {
+        this.actionTokenGeneratedByUserLifespan = actionTokenGeneratedByUserLifespan;
     }
 
     public List<String> getDefaultRoles() {
@@ -556,6 +576,14 @@ public class RealmRepresentation {
 
     public void setBruteForceProtected(Boolean bruteForceProtected) {
         this.bruteForceProtected = bruteForceProtected;
+    }
+
+    public Boolean isPermanentLockout() {
+        return permanentLockout;
+    }
+
+    public void setPermanentLockout(Boolean permanentLockout) {
+        this.permanentLockout = permanentLockout;
     }
 
     public Integer getMaxFailureWaitSeconds() {
@@ -855,6 +883,15 @@ public class RealmRepresentation {
 
     public void setClientAuthenticationFlow(String clientAuthenticationFlow) {
         this.clientAuthenticationFlow = clientAuthenticationFlow;
+    }
+
+    public String getDockerAuthenticationFlow() {
+        return dockerAuthenticationFlow;
+    }
+
+    public RealmRepresentation setDockerAuthenticationFlow(final String dockerAuthenticationFlow) {
+        this.dockerAuthenticationFlow = dockerAuthenticationFlow;
+        return this;
     }
 
     public String getKeycloakVersion() {

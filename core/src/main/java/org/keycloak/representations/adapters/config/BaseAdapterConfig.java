@@ -33,7 +33,7 @@ import java.util.TreeMap;
 @JsonPropertyOrder({"realm", "realm-public-key", "auth-server-url", "ssl-required",
         "resource", "public-client", "credentials",
         "use-resource-role-mappings",
-        "enable-cors", "cors-max-age", "cors-allowed-methods",
+        "enable-cors", "cors-max-age", "cors-allowed-methods", "cors-exposed-headers",
         "expose-token", "bearer-only", "autodetect-bearer-only", "enable-basic-auth"})
 public class BaseAdapterConfig extends BaseRealmConfig {
     @JsonProperty("resource")
@@ -48,6 +48,8 @@ public class BaseAdapterConfig extends BaseRealmConfig {
     protected String corsAllowedHeaders;
     @JsonProperty("cors-allowed-methods")
     protected String corsAllowedMethods;
+    @JsonProperty("cors-exposed-headers")
+    protected String corsExposedHeaders;
     @JsonProperty("expose-token")
     protected boolean exposeToken;
     @JsonProperty("bearer-only")
@@ -60,7 +62,8 @@ public class BaseAdapterConfig extends BaseRealmConfig {
     protected boolean publicClient;
     @JsonProperty("credentials")
     protected Map<String, Object> credentials = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
-
+     @JsonProperty("redirect-rewrite-rules")
+    protected Map<String, String> redirectRewriteRules;
 
     public boolean isUseResourceRoleMappings() {
         return useResourceRoleMappings;
@@ -110,6 +113,14 @@ public class BaseAdapterConfig extends BaseRealmConfig {
          this.corsAllowedMethods = corsAllowedMethods;
      }
 
+    public String getCorsExposedHeaders() {
+        return corsExposedHeaders;
+    }
+
+    public void setCorsExposedHeaders(String corsExposedHeaders) {
+        this.corsExposedHeaders = corsExposedHeaders;
+    }
+
     public boolean isExposeToken() {
          return exposeToken;
      }
@@ -157,4 +168,14 @@ public class BaseAdapterConfig extends BaseRealmConfig {
     public void setPublicClient(boolean publicClient) {
         this.publicClient = publicClient;
     }
+
+    public Map<String, String> getRedirectRewriteRules() {
+        return redirectRewriteRules;
+    }
+
+    public void setRedirectRewriteRules(Map<String, String> redirectRewriteRules) {
+        this.redirectRewriteRules = redirectRewriteRules;
+    }
+    
+    
 }

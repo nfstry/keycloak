@@ -35,6 +35,7 @@ import org.keycloak.authorization.model.ResourceServer;
 import org.keycloak.authorization.model.Scope;
 import org.keycloak.authorization.policy.provider.PolicyProviderFactory;
 import org.keycloak.authorization.store.ResourceStore;
+import org.keycloak.common.Profile;
 import org.keycloak.common.util.MultivaluedHashMap;
 import org.keycloak.common.util.Time;
 import org.keycloak.component.ComponentModel;
@@ -45,8 +46,8 @@ import org.keycloak.events.admin.AuthDetails;
 import org.keycloak.models.AuthenticationExecutionModel;
 import org.keycloak.models.AuthenticationFlowModel;
 import org.keycloak.models.AuthenticatorConfigModel;
+import org.keycloak.models.AuthenticatedClientSessionModel;
 import org.keycloak.models.ClientModel;
-import org.keycloak.models.ClientSessionModel;
 import org.keycloak.models.ClientTemplateModel;
 import org.keycloak.models.FederatedIdentityModel;
 import org.keycloak.models.GroupModel;
@@ -168,7 +169,6 @@ public class ModelToRepresentation {
         return rep;
     }
 
-
     public static UserRepresentation toRepresentation(KeycloakSession session, RealmModel realm, UserModel user) {
         UserRepresentation rep = new UserRepresentation();
         rep.setId(user.getId());
@@ -267,6 +267,7 @@ public class ModelToRepresentation {
         rep.setRegistrationEmailAsUsername(realm.isRegistrationEmailAsUsername());
         rep.setRememberMe(realm.isRememberMe());
         rep.setBruteForceProtected(realm.isBruteForceProtected());
+        rep.setPermanentLockout(realm.isPermanentLockout());
         rep.setMaxFailureWaitSeconds(realm.getMaxFailureWaitSeconds());
         rep.setMinimumQuickLoginWaitSeconds(realm.getMinimumQuickLoginWaitSeconds());
         rep.setWaitIncrementSeconds(realm.getWaitIncrementSeconds());
@@ -302,6 +303,8 @@ public class ModelToRepresentation {
         rep.setAccessCodeLifespan(realm.getAccessCodeLifespan());
         rep.setAccessCodeLifespanUserAction(realm.getAccessCodeLifespanUserAction());
         rep.setAccessCodeLifespanLogin(realm.getAccessCodeLifespanLogin());
+        rep.setActionTokenGeneratedByAdminLifespan(realm.getActionTokenGeneratedByAdminLifespan());
+        rep.setActionTokenGeneratedByUserLifespan(realm.getActionTokenGeneratedByUserLifespan());
         rep.setSmtpServer(new HashMap<>(realm.getSmtpConfig()));
         rep.setBrowserSecurityHeaders(realm.getBrowserSecurityHeaders());
         rep.setAccountTheme(realm.getAccountTheme());
@@ -323,6 +326,7 @@ public class ModelToRepresentation {
         if (realm.getDirectGrantFlow() != null) rep.setDirectGrantFlow(realm.getDirectGrantFlow().getAlias());
         if (realm.getResetCredentialsFlow() != null) rep.setResetCredentialsFlow(realm.getResetCredentialsFlow().getAlias());
         if (realm.getClientAuthenticationFlow() != null) rep.setClientAuthenticationFlow(realm.getClientAuthenticationFlow().getAlias());
+        if (realm.getDockerAuthenticationFlow() != null) rep.setDockerAuthenticationFlow(realm.getDockerAuthenticationFlow().getAlias());
 
         List<String> defaultRoles = realm.getDefaultRoles();
         if (!defaultRoles.isEmpty()) {
@@ -484,7 +488,7 @@ public class ModelToRepresentation {
         rep.setUsername(session.getUser().getUsername());
         rep.setUserId(session.getUser().getId());
         rep.setIpAddress(session.getIpAddress());
-        for (ClientSessionModel clientSession : session.getClientSessions()) {
+        for (AuthenticatedClientSessionModel clientSession : session.getAuthenticatedClientSessions().values()) {
             ClientModel client = clientSession.getClient();
             rep.getClients().put(client.getId(), client.getClientId());
         }
@@ -769,11 +773,7 @@ public class ModelToRepresentation {
         return rep;
     }
 
-    public static ScopeRepresentation toRepresentation(Scope model, AuthorizationProvider authorizationProvider) {
-        return toRepresentation(model, authorizationProvider, true);
-    }
-
-    public static ScopeRepresentation toRepresentation(Scope model, AuthorizationProvider authorizationProvider, boolean deep) {
+    public static ScopeRepresentation toRepresentation(Scope model) {
         ScopeRepresentation scope = new ScopeRepresentation();
 
         scope.setId(model.getId());
@@ -796,6 +796,10 @@ public class ModelToRepresentation {
     }
 
     public static <R extends AbstractPolicyRepresentation> R toRepresentation(Policy policy, Class<R> representationType, AuthorizationProvider authorization) {
+        return toRepresentation(policy, representationType, authorization, false);
+    }
+
+    public static <R extends AbstractPolicyRepresentation> R toRepresentation(Policy policy, Class<R> representationType, AuthorizationProvider authorization, boolean export) {
         R representation;
 
         try {
@@ -814,7 +818,11 @@ public class ModelToRepresentation {
         representation.setLogic(policy.getLogic());
 
         if (representation instanceof PolicyRepresentation) {
-            PolicyRepresentation.class.cast(representation).setConfig(policy.getConfig());
+            if (providerFactory != null && export) {
+                providerFactory.onExport(policy, PolicyRepresentation.class.cast(representation), authorization);
+            } else {
+                PolicyRepresentation.class.cast(representation).setConfig(policy.getConfig());
+            }
         } else {
             representation = (R) providerFactory.toRepresentation(policy, representation);
         }
@@ -868,8 +876,6 @@ public class ModelToRepresentation {
                 }
                 return scope;
             }).collect(Collectors.toSet()));
-
-            resource.setTypedScopes(new ArrayList<>());
 
             if (resource.getType() != null) {
                 ResourceStore resourceStore = authorization.getStoreFactory().getResourceStore();

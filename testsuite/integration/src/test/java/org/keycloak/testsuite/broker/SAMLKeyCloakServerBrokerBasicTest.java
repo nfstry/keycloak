@@ -93,9 +93,9 @@ public class SAMLKeyCloakServerBrokerBasicTest extends AbstractKeycloakIdentityP
     @Override
     protected void doAssertTokenRetrieval(String pageSource) {
         try {
-            SAML2Request saml2Request = new SAML2Request();
-            ResponseType responseType = (ResponseType) saml2Request
-                    .getSAML2ObjectFromStream(PostBindingUtil.base64DecodeAsStream(pageSource));
+            ResponseType responseType = (ResponseType) SAML2Request
+                    .getSAML2ObjectFromStream(PostBindingUtil.base64DecodeAsStream(pageSource))
+                    .getSamlObject();
                     //.getSAML2ObjectFromStream(PostBindingUtil.base64DecodeAsStream(URLDecoder.decode(pageSource, "UTF-8")));
 
             assertNotNull(responseType);
@@ -128,7 +128,7 @@ public class SAMLKeyCloakServerBrokerBasicTest extends AbstractKeycloakIdentityP
     }
 
     @Test
-    public void testSuccessfulAuthenticationWithoutUpdateProfile_newUser_emailAsUsername() {
+    public void testSuccessfulAuthenticationWithoutUpdateProfile_newUser_emailAsUsername() throws Exception {
         super.testSuccessfulAuthenticationWithoutUpdateProfile_newUser_emailAsUsername();
     }
 

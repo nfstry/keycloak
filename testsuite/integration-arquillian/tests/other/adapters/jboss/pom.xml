@@ -24,7 +24,7 @@
     <parent>
         <groupId>org.keycloak.testsuite</groupId>
         <artifactId>integration-arquillian-tests-adapters</artifactId>
-        <version>3.1.0.CR1-SNAPSHOT</version>
+        <version>3.3.0.CR1-SNAPSHOT</version>
     </parent>
 
     <artifactId>integration-arquillian-tests-adapters-jboss</artifactId>
@@ -149,6 +149,12 @@
             <id>app-server-wildfly9</id>
             <modules>
                 <module>wildfly9</module>
+            </modules>
+        </profile>
+        <profile>
+            <id>app-server-wildfly10</id>
+            <modules>
+                <module>wildfly10</module>
             </modules>
         </profile>
         <profile>

@@ -59,6 +59,8 @@ import org.keycloak.testsuite.runonserver.RunHelpers;
 import org.keycloak.testsuite.runonserver.RunOnServerDeployment;
 import org.keycloak.testsuite.util.OAuthClient;
 
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.keycloak.models.AccountRoles.MANAGE_ACCOUNT;
 import static org.keycloak.models.AccountRoles.MANAGE_ACCOUNT_LINKS;
 import static org.keycloak.models.Constants.ACCOUNT_MANAGEMENT_CLIENT_ID;
@@ -123,7 +125,7 @@ public class MigrationTest extends AbstractKeycloakTest {
     
     @Test
     @Migration(versionFrom = "1.9.8.Final")
-    public void migration1_9_8Test() {
+    public void migration1_9_8Test() throws Exception {
         testMigratedData();
         testMigrationTo2_0_0();
         testMigrationTo2_1_0();
@@ -132,6 +134,7 @@ public class MigrationTest extends AbstractKeycloakTest {
         testMigrationTo2_5_0();
         testMigrationTo2_5_1();
         testMigrationTo3_0_0();
+        testMigrationTo3_2_0();
     }
     
     @Test
@@ -200,7 +203,7 @@ public class MigrationTest extends AbstractKeycloakTest {
         testDuplicateEmailSupport(masterRealm, migrationRealm);
     }
 
-    private void testMigrationTo2_5_1() {
+    private void testMigrationTo2_5_1() throws Exception {
         testOfflineTokenLogin();
     }
     
@@ -210,7 +213,26 @@ public class MigrationTest extends AbstractKeycloakTest {
     private void testMigrationTo3_0_0() {
         testRoleManageAccountLinks(masterRealm, migrationRealm);
     }
-    
+
+    private void testMigrationTo3_2_0() {
+        assertNull(masterRealm.toRepresentation().getPasswordPolicy());
+        assertNull(migrationRealm.toRepresentation().getPasswordPolicy());
+
+        testDockerAuthenticationFlow(masterRealm, migrationRealm);
+    }
+
+    private void testDockerAuthenticationFlow(RealmResource... realms) {
+        for (RealmResource realm : realms) {
+            AuthenticationFlowRepresentation flow = null;
+            for (AuthenticationFlowRepresentation f : realm.flows().getFlows()) {
+                if (DefaultAuthenticationFlows.DOCKER_AUTH.equals(f.getAlias())) {
+                    flow = f;
+                }
+            }
+            assertNotNull(flow);
+        }
+    }
+
     private void testRoleManageAccountLinks(RealmResource... realms) {
         log.info("testing role manage account links");
         for (RealmResource realm : realms) {
@@ -407,12 +429,12 @@ public class MigrationTest extends AbstractKeycloakTest {
         }
     }
 
-    private void testOfflineTokenLogin() {
+    private void testOfflineTokenLogin() throws Exception {
         if (isImportMigrationMode()) {
             log.info("Skip offline token login test in the 'import' migrationMode");
         } else {
             log.info("test login with old offline token");
-            String oldOfflineToken = suiteContext.getMigrationContext().getOfflineToken();
+            String oldOfflineToken = suiteContext.getMigrationContext().loadOfflineToken();
             Assert.assertNotNull(oldOfflineToken);
 
             oauth.realm(MIGRATION);

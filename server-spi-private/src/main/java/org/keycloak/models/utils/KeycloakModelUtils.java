@@ -19,7 +19,6 @@ package org.keycloak.models.utils;
 
 import org.keycloak.broker.social.SocialIdentityProvider;
 import org.keycloak.broker.social.SocialIdentityProviderFactory;
-import org.keycloak.common.util.Base64Url;
 import org.keycloak.common.util.CertificateUtils;
 import org.keycloak.common.util.KeyUtils;
 import org.keycloak.common.util.PemUtils;
@@ -75,14 +74,14 @@ public final class KeycloakModelUtils {
         return UUID.randomUUID().toString();
     }
 
-    public static String generateSecret() {
+    public static byte[] generateSecret() {
         return generateSecret(32);
     }
 
-    public static String generateSecret(int bytes) {
+    public static byte[] generateSecret(int bytes) {
         byte[] buf = new byte[bytes];
         new SecureRandom().nextBytes(buf);
-        return Base64Url.encode(buf);
+        return buf;
     }
 
     public static PublicKey getPublicKey(String publicKeyPem) {
@@ -490,6 +489,7 @@ public final class KeycloakModelUtils {
         if ((realmFlow = realm.getClientAuthenticationFlow()) != null && realmFlow.getId().equals(model.getId())) return true;
         if ((realmFlow = realm.getDirectGrantFlow()) != null && realmFlow.getId().equals(model.getId())) return true;
         if ((realmFlow = realm.getResetCredentialsFlow()) != null && realmFlow.getId().equals(model.getId())) return true;
+        if ((realmFlow = realm.getDockerAuthenticationFlow()) != null && realmFlow.getId().equals(model.getId())) return true;
 
         for (IdentityProviderModel idp : realm.getIdentityProviders()) {
             if (model.getId().equals(idp.getFirstBrokerLoginFlowId())) return true;

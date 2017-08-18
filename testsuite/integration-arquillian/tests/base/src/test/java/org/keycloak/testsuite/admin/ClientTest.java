@@ -56,12 +56,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.Assert.*;
 
 /**
  * @author <a href="mailto:sthorger@redhat.com">Stian Thorgersen</a>
@@ -82,7 +77,9 @@ public class ClientTest extends AbstractAdminTest {
         response.close();
         String id = ApiUtil.getCreatedId(response);
         getCleanup().addClientUuid(id);
+        ClientRepresentation found = ApiUtil.findClientResourceByClientId(realm, "my-app").toRepresentation();
 
+        assertEquals("my-app", found.getClientId());
         assertAdminEvents.assertEvent(realmId, OperationType.CREATE, AdminEventPaths.clientResourcePath(id), rep, ResourceType.CLIENT);
 
         rep.setId(id);
@@ -102,8 +99,9 @@ public class ClientTest extends AbstractAdminTest {
     public void removeClient() {
         String id = createClient().getId();
 
+        assertNotNull(ApiUtil.findClientByClientId(realm, "my-app"));
         realm.clients().get(id).remove();
-
+        assertNull(ApiUtil.findClientResourceByClientId(realm, "my-app"));
         assertAdminEvents.assertEvent(realmId, OperationType.DELETE, AdminEventPaths.clientResourcePath(id), ResourceType.CLIENT);
     }
 
@@ -146,6 +144,21 @@ public class ClientTest extends AbstractAdminTest {
         List<UserSessionRepresentation> userSessions = app.getUserSessions(0, 100);
         assertEquals(2, userSessions.size());
         assertEquals(1, userSessions.get(0).getClients().size());
+    }
+
+    @Test
+    public void getAllClients() {
+        List<ClientRepresentation> allClients = realm.clients().findAll();
+        assertNotNull(allClients);
+        assertFalse(allClients.isEmpty());
+    }
+
+    @Test
+    public void getClientById() {
+        createClient();
+        ClientRepresentation rep = ApiUtil.findClientResourceByClientId(realm, "my-app").toRepresentation();
+        ClientRepresentation gotById = realm.clients().get(rep.getId()).toRepresentation();
+        assertClient(rep, gotById);
     }
 
     @Test
@@ -466,8 +479,8 @@ public class ClientTest extends AbstractAdminTest {
         // Create foo mapper
         ProtocolMapperRepresentation fooMapper = new ProtocolMapperRepresentation();
         fooMapper.setName("foo");
-        fooMapper.setProtocol("fooProtocol");
-        fooMapper.setProtocolMapper("fooMapper");
+        fooMapper.setProtocol("openid-connect");
+        fooMapper.setProtocolMapper("oidc-hardcoded-claim-mapper");
         fooMapper.setConsentRequired(true);
         Response response = mappersResource.createMapper(fooMapper);
         String location = response.getLocation().toString();
@@ -480,13 +493,13 @@ public class ClientTest extends AbstractAdminTest {
         assertEquals(fooMapper.getName(), "foo");
 
         // Update foo mapper
-        fooMapper.setProtocolMapper("foo-mapper-updated");
+        fooMapper.setConsentRequired(false);
         mappersResource.update(fooMapperId, fooMapper);
 
         assertAdminEvents.assertEvent(realmId, OperationType.UPDATE, AdminEventPaths.clientProtocolMapperPath(clientDbId, fooMapperId), fooMapper, ResourceType.PROTOCOL_MAPPER);
 
         fooMapper = mappersResource.getMapperById(fooMapperId);
-        assertEquals(fooMapper.getProtocolMapper(), "foo-mapper-updated");
+        assertFalse(fooMapper.isConsentRequired());
 
         // Remove foo mapper
         mappersResource.delete(fooMapperId);

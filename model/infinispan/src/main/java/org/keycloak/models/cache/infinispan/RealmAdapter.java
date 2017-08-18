@@ -55,7 +55,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class RealmAdapter implements CachedRealmModel {
     protected CachedRealm cached;
     protected RealmCacheSession cacheSession;
-    protected RealmModel updated;
+    protected volatile RealmModel updated;
     protected RealmCache cache;
     protected KeycloakSession session;
 
@@ -75,7 +75,7 @@ public class RealmAdapter implements CachedRealmModel {
         return updated;
     }
 
-    protected boolean invalidated;
+    protected volatile boolean invalidated;
 
     protected void invalidateFlag() {
         invalidated = true;
@@ -219,6 +219,18 @@ public class RealmAdapter implements CachedRealmModel {
     public void setBruteForceProtected(boolean value) {
         getDelegateForUpdate();
         updated.setBruteForceProtected(value);
+    }
+
+    @Override
+    public boolean isPermanentLockout() {
+        if(isUpdated()) return updated.isPermanentLockout();
+        return cached.isPermanentLockout();
+    }
+
+    @Override
+    public void setPermanentLockout(final boolean val) {
+        getDelegateForUpdate();
+        updated.setPermanentLockout(val);
     }
 
     @Override
@@ -460,6 +472,30 @@ public class RealmAdapter implements CachedRealmModel {
     public void setAccessCodeLifespanLogin(int seconds) {
         getDelegateForUpdate();
         updated.setAccessCodeLifespanLogin(seconds);
+    }
+
+    @Override
+    public int getActionTokenGeneratedByAdminLifespan() {
+        if (isUpdated()) return updated.getActionTokenGeneratedByAdminLifespan();
+        return cached.getActionTokenGeneratedByAdminLifespan();
+    }
+
+    @Override
+    public void setActionTokenGeneratedByAdminLifespan(int seconds) {
+        getDelegateForUpdate();
+        updated.setActionTokenGeneratedByAdminLifespan(seconds);
+    }
+
+    @Override
+    public int getActionTokenGeneratedByUserLifespan() {
+        if (isUpdated()) return updated.getActionTokenGeneratedByUserLifespan();
+        return cached.getActionTokenGeneratedByUserLifespan();
+    }
+
+    @Override
+    public void setActionTokenGeneratedByUserLifespan(int seconds) {
+        getDelegateForUpdate();
+        updated.setActionTokenGeneratedByUserLifespan(seconds);
     }
 
     @Override
@@ -1000,6 +1036,18 @@ public class RealmAdapter implements CachedRealmModel {
     public void setClientAuthenticationFlow(AuthenticationFlowModel flow) {
         getDelegateForUpdate();
         updated.setClientAuthenticationFlow(flow);
+    }
+
+    @Override
+    public AuthenticationFlowModel getDockerAuthenticationFlow() {
+        if (isUpdated()) return updated.getDockerAuthenticationFlow();
+        return cached.getDockerAuthenticationFlow();
+    }
+
+    @Override
+    public void setDockerAuthenticationFlow(final AuthenticationFlowModel flow) {
+        getDelegateForUpdate();
+        updated.setDockerAuthenticationFlow(flow);
     }
 
     @Override

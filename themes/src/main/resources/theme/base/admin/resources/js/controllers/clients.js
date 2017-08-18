@@ -437,9 +437,6 @@ module.controller('ClientCertificateImportCtrl', function($scope, $location, $ht
             }).success(function(data, status, headers) {
                 Notifications.success("Keystore uploaded successfully.");
                 $location.url(redirectLocation);
-            }).error(function(data) {
-                var errorMsg = data['error_description'] ? data['error_description'] : 'The key store can not be uploaded. Please verify the file.';
-                Notifications.error(errorMsg);
             });
             //.then(success, error, progress);
         }
@@ -498,8 +495,8 @@ module.controller('ClientCertificateExportCtrl', function($scope, $location, $ht
                 'Content-Type': 'application/json',
                 'Accept': 'application/octet-stream'
             }
-        }).success(function(data){
-            var blob = new Blob([data], {
+        }).then(function(response){
+            var blob = new Blob([response.data], {
                 type: 'application/octet-stream'
             });
             var ext = ".jks";
@@ -511,10 +508,10 @@ module.controller('ClientCertificateExportCtrl', function($scope, $location, $ht
             }
 
             saveAs(blob, 'keystore' + ext);
-        }).error(function(data) {
+        }).catch(function(response) {
             var errorMsg = 'Error downloading';
             try {
-                var error = JSON.parse(String.fromCharCode.apply(null, new Uint8Array(data)));
+                var error = JSON.parse(String.fromCharCode.apply(null, new Uint8Array(response.data)));
                 errorMsg = error['error_description'] ? error['error_description'] : errorMsg;
             } catch (err) {
             }
@@ -731,9 +728,9 @@ module.controller('ClientImportCtrl', function($scope, $location, $upload, realm
 });
 
 
-module.controller('ClientListCtrl', function($scope, realm, clients, Client, serverInfo, $route, Dialog, Notifications, filterFilter) {
+module.controller('ClientListCtrl', function($scope, realm, Client, serverInfo, $route, Dialog, Notifications, filterFilter) {
     $scope.realm = realm;
-    $scope.clients = clients;
+    $scope.clients = Client.query({realm: realm.realm, viewableOnly: true});
     $scope.currentPage = 1;
     $scope.currentPageInput = 1;
     $scope.pageSize = 20;
@@ -785,16 +782,16 @@ module.controller('ClientInstallationCtrl', function($scope, realm, client, serv
                 method: 'GET',
                 responseType: 'arraybuffer',
                 cache: false
-            }).success(function(data) {
-                var installation = data;
+            }).then(function(response) {
+                var installation = response.data;
                 $scope.installation = installation;
                 }
             );
         } else {
-            $http.get(url).success(function (data) {
-                var installation = data;
+            $http.get(url).then(function (response) {
+                var installation = response.data;
                 if ($scope.configFormat.mediaType == 'application/json') {
-                    installation = angular.fromJson(data);
+                    installation = angular.fromJson(response.data);
                     installation = angular.toJson(installation, true);
                 }
                 $scope.installation = installation;
@@ -817,7 +814,7 @@ module.controller('ClientDetailCtrl', function($scope, realm, client, templates,
         "bearer-only"
     ];
 
-    $scope.protocols = Object.keys(serverInfo.providers['login-protocol'].providers).sort();
+    $scope.protocols = serverInfo.listProviderIds('login-protocol');
 
     $scope.templates = [ {name:'NONE'}];
     for (var i = 0; i < templates.length; i++) {
@@ -1111,6 +1108,12 @@ module.controller('ClientDetailCtrl', function($scope, realm, client, templates,
         } else if ($scope.clientEdit.bearerOnly) {
             $scope.clientEdit.serviceAccountsEnabled = false;
         }
+        if ($scope.client.authorizationServicesEnabled && !$scope.clientEdit.authorizationServicesEnabled) {
+            Dialog.confirm("Disable Authorization Settings", "Are you sure you want to disable authorization ? Once you save your changes, all authorization settings associated with this client will be removed. This operation can not be reverted.", function () {
+            }, function () {
+                $scope.clientEdit.authorizationServicesEnabled = true;
+            });
+        }
     }
 
     $scope.$watch('clientEdit', function() {
@@ -1223,12 +1226,6 @@ module.controller('ClientDetailCtrl', function($scope, realm, client, templates,
             }, $scope.clientEdit, function() {
                 $route.reload();
                 Notifications.success("Your changes have been saved to the client.");
-            }, function(error) {
-                if (error.status == 400 && error.data.error_description) {
-                    Notifications.error(error.data.error_description);
-                } else {
-                    Notifications.error('Unexpected error when updating client');
-                }
             });
         }
     };
@@ -1240,19 +1237,10 @@ module.controller('ClientDetailCtrl', function($scope, realm, client, templates,
     $scope.cancel = function() {
         $location.url("/realms/" + realm.realm + "/clients");
     };
-
-    $scope.onAuthorizationSettingsChange = function () {
-        if ($scope.client.authorizationServicesEnabled && !$scope.clientEdit.authorizationServicesEnabled) {
-            Dialog.confirm("Disable Authorization Settings", "Are you sure you want to disable authorization ? Once you save your changes, all authorization settings associated with this client will be removed. This operation can not be reverted.", function () {
-            }, function () {
-                $scope.clientEdit.authorizationServicesEnabled = true;
-            });
-        }
-    }
 });
 
 module.controller('CreateClientCtrl', function($scope, realm, client, templates, $route, serverInfo, Client, ClientDescriptionConverter, $location, $modal, Dialog, Notifications) {
-    $scope.protocols = Object.keys(serverInfo.providers['login-protocol'].providers).sort();
+    $scope.protocols = serverInfo.listProviderIds('login-protocol');
     $scope.create = true;
     $scope.templates = [ {name:'NONE'}];
     var templateNameMap = new Object();
@@ -1351,12 +1339,6 @@ module.controller('CreateClientCtrl', function($scope, realm, client, templates,
             var id = l.substring(l.lastIndexOf("/") + 1);
             $location.url("/realms/" + realm.realm + "/clients/" + id);
             Notifications.success("The client has been created.");
-        }, function(error) {
-            if (error.status == 400 && error.data.error_description) {
-                Notifications.error(error.data.error_description);
-            } else {
-                Notifications.error('Unexpected error when creating client');
-            }
         });
     };
 
@@ -1405,6 +1387,7 @@ module.controller('ClientScopeMappingCtrl', function($scope, $http, realm, clien
     }
 
     $scope.changeFlag = function() {
+        console.log('changeFlag');
         Client.update({
             realm : realm.realm,
             client : client.id
@@ -1445,7 +1428,7 @@ module.controller('ClientScopeMappingCtrl', function($scope, $http, realm, clien
         var roles = $scope.selectedRealmRoles;
         $scope.selectedRealmRoles = [];
         $http.post(authUrl + '/admin/realms/' + realm.realm + '/clients/' + client.id + '/scope-mappings/realm',
-            roles).success(function() {
+            roles).then(function() {
                 updateRealmRoles();
                 Notifications.success("Scope mappings updated.");
             });
@@ -1455,7 +1438,7 @@ module.controller('ClientScopeMappingCtrl', function($scope, $http, realm, clien
         var roles = $scope.selectedRealmMappings;
         $scope.selectedRealmMappings = [];
         $http.delete(authUrl + '/admin/realms/' + realm.realm + '/clients/' + client.id +  '/scope-mappings/realm',
-            {data : roles, headers : {"content-type" : "application/json"}}).success(function () {
+            {data : roles, headers : {"content-type" : "application/json"}}).then(function () {
                 updateRealmRoles();
                 Notifications.success("Scope mappings updated.");
             });
@@ -1465,7 +1448,7 @@ module.controller('ClientScopeMappingCtrl', function($scope, $http, realm, clien
         var roles = $scope.selectedClientRoles;
         $scope.selectedClientRoles = [];
         $http.post(authUrl + '/admin/realms/' + realm.realm + '/clients/' + client.id +  '/scope-mappings/clients/' + $scope.targetClient.id,
-                roles).success(function () {
+                roles).then(function () {
                 updateClientRoles();
                 Notifications.success("Scope mappings updated.");
             });
@@ -1475,7 +1458,7 @@ module.controller('ClientScopeMappingCtrl', function($scope, $http, realm, clien
         var roles = $scope.selectedClientMappings;
         $scope.selectedClientMappings = [];
         $http.delete(authUrl + '/admin/realms/' + realm.realm + '/clients/' + client.id +  '/scope-mappings/clients/' + $scope.targetClient.id,
-            {data : roles, headers : {"content-type" : "application/json"}}).success(function () {
+            {data : roles, headers : {"content-type" : "application/json"}}).then(function () {
                 updateClientRoles();
                 Notifications.success("Scope mappings updated.");
             });
@@ -1705,10 +1688,10 @@ module.controller('AddBuiltinProtocolMapperCtrl', function($scope, realm, client
             }
         }
         $http.post(authUrl + '/admin/realms/' + realm.realm + '/clients/' + client.id + '/protocol-mappers/add-models',
-                   toAdd).success(function() {
+                   toAdd).then(function() {
                 Notifications.success("Mappers added");
                 $location.url('/realms/' + realm.realm + '/clients/' + client.id +  '/mappers');
-            }).error(function() {
+            }).catch(function() {
                 Notifications.error("Error adding mappers");
                 $location.url('/realms/' + realm.realm + '/clients/' + client.id +  '/mappers');
             });
@@ -1821,12 +1804,6 @@ module.controller('ClientProtocolMapperCtrl', function($scope, realm, serverInfo
             mapper = angular.copy($scope.mapper);
             $location.url("/realms/" + realm.realm + '/clients/' + client.id + "/mappers/" + $scope.model.mapper.id);
             Notifications.success("Your changes have been saved.");
-        }, function(error) {
-            if (error.status == 400 && error.data.error_description) {
-                Notifications.error(error.data.error_description);
-            } else {
-                Notifications.error('Unexpected error when updating protocol mapper');
-            }
         });
     };
 
@@ -1893,14 +1870,6 @@ module.controller('ClientProtocolMapperCreateCtrl', function($scope, realm, serv
             var id = l.substring(l.lastIndexOf("/") + 1);
             $location.url("/realms/" + realm.realm + '/clients/' + client.id + "/mappers/" + id);
             Notifications.success("Mapper has been created.");
-        }, function(error) {
-            if (error.status == 400 && error.data.error_description) {
-                Notifications.error(error.data.error_description);
-            } else if (error.status == 409 && error.data.errorMessage) {
-                Notifications.error(error.data.errorMessage);
-            } else {
-                Notifications.error('Unexpected error when updating protocol mapper');
-            }
         });
     };
 
@@ -1946,7 +1915,7 @@ module.controller('ClientTemplateListCtrl', function($scope, realm, templates, C
 });
 
 module.controller('ClientTemplateDetailCtrl', function($scope, realm, template, $route, serverInfo, ClientTemplate, $location, $modal, Dialog, Notifications) {
-    $scope.protocols = Object.keys(serverInfo.providers['login-protocol'].providers).sort();
+    $scope.protocols = serverInfo.listProviderIds('login-protocol');
 
     $scope.realm = realm;
     $scope.create = !template.name;
@@ -2233,10 +2202,10 @@ module.controller('ClientTemplateAddBuiltinProtocolMapperCtrl', function($scope,
             }
         }
         $http.post(authUrl + '/admin/realms/' + realm.realm + '/client-templates/' + template.id + '/protocol-mappers/add-models',
-            toAdd).success(function() {
+            toAdd).then(function() {
                 Notifications.success("Mappers added");
                 $location.url('/realms/' + realm.realm + '/client-templates/' + template.id +  '/mappers');
-            }).error(function() {
+            }).catch(function() {
                 Notifications.error("Error adding mappers");
                 $location.url('/realms/' + realm.realm + '/client-templates/' + template.id +  '/mappers');
             });
@@ -2304,7 +2273,7 @@ module.controller('ClientTemplateScopeMappingCtrl', function($scope, $http, real
         var roles = $scope.selectedRealmRoles;
         $scope.selectedRealmRoles = [];
         $http.post(authUrl + '/admin/realms/' + realm.realm + '/client-templates/' + template.id + '/scope-mappings/realm',
-            roles).success(function() {
+            roles).then(function() {
                 updateTemplateRealmRoles();
                 Notifications.success("Scope mappings updated.");
             });
@@ -2314,7 +2283,7 @@ module.controller('ClientTemplateScopeMappingCtrl', function($scope, $http, real
         var roles = $scope.selectedRealmMappings;
         $scope.selectedRealmMappings = [];
         $http.delete(authUrl + '/admin/realms/' + realm.realm + '/client-templates/' + template.id +  '/scope-mappings/realm',
-            {data : roles, headers : {"content-type" : "application/json"}}).success(function () {
+            {data : roles, headers : {"content-type" : "application/json"}}).then(function () {
                 updateTemplateRealmRoles();
                 Notifications.success("Scope mappings updated.");
             });
@@ -2324,7 +2293,7 @@ module.controller('ClientTemplateScopeMappingCtrl', function($scope, $http, real
         var roles = $scope.selectedClientRoles;
         $scope.selectedClientRoles = [];
         $http.post(authUrl + '/admin/realms/' + realm.realm + '/client-templates/' + template.id +  '/scope-mappings/clients/' + $scope.targetClient.id,
-            roles).success(function () {
+            roles).then(function () {
                 updateTemplateClientRoles();
                 Notifications.success("Scope mappings updated.");
             });
@@ -2334,7 +2303,7 @@ module.controller('ClientTemplateScopeMappingCtrl', function($scope, $http, real
         var roles = $scope.selectedClientMappings;
         $scope.selectedClientMappings = [];
         $http.delete(authUrl + '/admin/realms/' + realm.realm + '/client-templates/' + template.id +  '/scope-mappings/clients/' + $scope.targetClient.id,
-            {data : roles, headers : {"content-type" : "application/json"}}).success(function () {
+            {data : roles, headers : {"content-type" : "application/json"}}).then(function () {
                 updateTemplateClientRoles();
                 Notifications.success("Scope mappings updated.");
             });

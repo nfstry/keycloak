@@ -35,6 +35,8 @@ import java.util.Map;
 
 /**
  * @author <a href="mailto:bill@burkecentral.com">Bill Burke</a>
+ * @author <a href="mailto:brad.culley@spartasystems.com">Brad Culley</a>
+ * @author <a href="mailto:john.ament@spartasystems.com">John D. Ament</a>
  * @version $Revision: 1 $
  */
 public class KeycloakDeployment {
@@ -73,6 +75,7 @@ public class KeycloakDeployment {
     protected int corsMaxAge = -1;
     protected String corsAllowedHeaders;
     protected String corsAllowedMethods;
+    protected String corsExposedHeaders;
     protected boolean exposeToken;
     protected boolean alwaysRefreshToken;
     protected boolean registerNodeAtStartup;
@@ -87,6 +90,9 @@ public class KeycloakDeployment {
 
     // https://tools.ietf.org/html/rfc7636
     protected boolean pkce = false;
+    protected boolean ignoreOAuthQueryParameter;
+    
+    protected Map<String, String> redirectRewriteRules;
 
     public KeycloakDeployment() {
     }
@@ -325,6 +331,14 @@ public class KeycloakDeployment {
         this.corsAllowedMethods = corsAllowedMethods;
     }
 
+    public String getCorsExposedHeaders() {
+        return corsExposedHeaders;
+    }
+
+    public void setCorsExposedHeaders(String corsExposedHeaders) {
+        this.corsExposedHeaders = corsExposedHeaders;
+    }
+
     public boolean isExposeToken() {
         return exposeToken;
     }
@@ -427,4 +441,21 @@ public class KeycloakDeployment {
         this.pkce = pkce;
     }
 
+    public void setIgnoreOAuthQueryParameter(boolean ignoreOAuthQueryParameter) {
+        this.ignoreOAuthQueryParameter = ignoreOAuthQueryParameter;
+    }
+
+    public boolean isOAuthQueryParameterEnabled() {
+        return !this.ignoreOAuthQueryParameter;
+    }
+
+    public Map<String, String> getRedirectRewriteRules() {
+        return redirectRewriteRules;
+    }
+
+    public void setRewriteRedirectRules(Map<String, String> redirectRewriteRules) {
+        this.redirectRewriteRules = redirectRewriteRules;
+    }
+    
+    
 }

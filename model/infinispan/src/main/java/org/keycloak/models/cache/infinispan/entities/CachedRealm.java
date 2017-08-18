@@ -65,6 +65,7 @@ public class CachedRealm extends AbstractExtendableRevisioned {
     protected boolean editUsernameAllowed;
     //--- brute force settings
     protected boolean bruteForceProtected;
+    protected boolean permanentLockout;
     protected int maxFailureWaitSeconds;
     protected int minimumQuickLoginWaitSeconds;
     protected int waitIncrementSeconds;
@@ -82,6 +83,8 @@ public class CachedRealm extends AbstractExtendableRevisioned {
     protected int accessCodeLifespan;
     protected int accessCodeLifespanUserAction;
     protected int accessCodeLifespanLogin;
+    protected int actionTokenGeneratedByAdminLifespan;
+    protected int actionTokenGeneratedByUserLifespan;
     protected int notBefore;
     protected PasswordPolicy passwordPolicy;
     protected OTPPolicy otpPolicy;
@@ -114,6 +117,7 @@ public class CachedRealm extends AbstractExtendableRevisioned {
     protected AuthenticationFlowModel directGrantFlow;
     protected AuthenticationFlowModel resetCredentialsFlow;
     protected AuthenticationFlowModel clientAuthenticationFlow;
+    protected AuthenticationFlowModel dockerAuthenticationFlow;
 
     protected boolean eventsEnabled;
     protected long eventsExpiration;
@@ -156,6 +160,7 @@ public class CachedRealm extends AbstractExtendableRevisioned {
         editUsernameAllowed = model.isEditUsernameAllowed();
         //--- brute force settings
         bruteForceProtected = model.isBruteForceProtected();
+        permanentLockout = model.isPermanentLockout();
         maxFailureWaitSeconds = model.getMaxFailureWaitSeconds();
         minimumQuickLoginWaitSeconds = model.getMinimumQuickLoginWaitSeconds();
         waitIncrementSeconds = model.getWaitIncrementSeconds();
@@ -173,6 +178,8 @@ public class CachedRealm extends AbstractExtendableRevisioned {
         accessCodeLifespan = model.getAccessCodeLifespan();
         accessCodeLifespanUserAction = model.getAccessCodeLifespanUserAction();
         accessCodeLifespanLogin = model.getAccessCodeLifespanLogin();
+        actionTokenGeneratedByAdminLifespan = model.getActionTokenGeneratedByAdminLifespan();
+        actionTokenGeneratedByUserLifespan = model.getActionTokenGeneratedByUserLifespan();
         notBefore = model.getNotBefore();
         passwordPolicy = model.getPasswordPolicy();
         otpPolicy = model.getOTPPolicy();
@@ -246,6 +253,7 @@ public class CachedRealm extends AbstractExtendableRevisioned {
         directGrantFlow = model.getDirectGrantFlow();
         resetCredentialsFlow = model.getResetCredentialsFlow();
         clientAuthenticationFlow = model.getClientAuthenticationFlow();
+        dockerAuthenticationFlow = model.getDockerAuthenticationFlow();
 
         for (ComponentModel component : model.getComponents()) {
             componentsByParentAndType.add(component.getParentId() + component.getProviderType(), component);
@@ -312,6 +320,10 @@ public class CachedRealm extends AbstractExtendableRevisioned {
 
     public boolean isBruteForceProtected() {
         return bruteForceProtected;
+    }
+
+    public boolean isPermanentLockout() {
+        return permanentLockout;
     }
 
     public int getMaxFailureWaitSeconds() {
@@ -391,6 +403,14 @@ public class CachedRealm extends AbstractExtendableRevisioned {
     }
     public int getAccessCodeLifespanLogin() {
         return accessCodeLifespanLogin;
+    }
+
+    public int getActionTokenGeneratedByAdminLifespan() {
+        return actionTokenGeneratedByAdminLifespan;
+    }
+
+    public int getActionTokenGeneratedByUserLifespan() {
+        return actionTokenGeneratedByUserLifespan;
     }
 
     public List<RequiredCredentialModel> getRequiredCredentials() {
@@ -527,6 +547,10 @@ public class CachedRealm extends AbstractExtendableRevisioned {
 
     public AuthenticationFlowModel getClientAuthenticationFlow() {
         return clientAuthenticationFlow;
+    }
+
+    public AuthenticationFlowModel getDockerAuthenticationFlow() {
+        return dockerAuthenticationFlow;
     }
 
     public List<String> getDefaultGroups() {

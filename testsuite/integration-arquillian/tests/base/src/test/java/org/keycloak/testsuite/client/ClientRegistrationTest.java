@@ -41,11 +41,19 @@ public class ClientRegistrationTest extends AbstractClientRegistrationTest {
     private static final String CLIENT_ID = "test-client";
     private static final String CLIENT_SECRET = "test-client-secret";
 
-    private ClientRepresentation registerClient() throws ClientRegistrationException {
-        ClientRepresentation client = new ClientRepresentation();
+    private ClientRepresentation buildClient() {
+    	ClientRepresentation client = new ClientRepresentation();
         client.setClientId(CLIENT_ID);
         client.setSecret(CLIENT_SECRET);
-
+        
+        return client;
+    }
+    
+    private ClientRepresentation registerClient() throws ClientRegistrationException {
+    	return registerClient(buildClient());
+    }
+    
+    private ClientRepresentation registerClient(ClientRepresentation client) throws ClientRegistrationException {
         ClientRepresentation createdClient = reg.create(client);
         assertEquals(CLIENT_ID, createdClient.getClientId());
 
@@ -98,6 +106,17 @@ public class ClientRegistrationTest extends AbstractClientRegistrationTest {
         }
     }
 
+    @Test
+    public void registerClientWithNonAsciiChars() throws ClientRegistrationException {
+    	authCreateClients();
+    	ClientRepresentation client = buildClient();
+    	String name = "Cli\u00EBnt";
+		client.setName(name);
+    	
+    	ClientRepresentation createdClient = registerClient(client);
+    	assertEquals(name, createdClient.getName());
+    }
+    
     @Test
     public void getClientAsAdmin() throws ClientRegistrationException {
         registerClientAsAdmin();
@@ -168,6 +187,23 @@ public class ClientRegistrationTest extends AbstractClientRegistrationTest {
     }
 
     @Test
+    public void updateClientSecret() throws ClientRegistrationException {
+        authManageClients();
+
+        registerClient();
+
+        ClientRepresentation client = reg.get(CLIENT_ID);
+        assertNotNull(client.getSecret());
+        client.setSecret("mysecret");
+
+        reg.update(client);
+
+        ClientRepresentation updatedClient = reg.get(CLIENT_ID);
+
+        assertEquals("mysecret", updatedClient.getSecret());
+    }
+
+    @Test
     public void updateClientAsAdminWithCreateOnly() throws ClientRegistrationException {
         authCreateClients();
         try {
@@ -202,6 +238,20 @@ public class ClientRegistrationTest extends AbstractClientRegistrationTest {
         } catch (ClientRegistrationException e) {
             assertEquals(404, ((HttpErrorException) e.getCause()).getStatusLine().getStatusCode());
         }
+    }
+
+    @Test
+    public void updateClientWithNonAsciiChars() throws ClientRegistrationException {
+    	authCreateClients();
+    	registerClient();
+    	
+    	authManageClients();
+    	ClientRepresentation client = reg.get(CLIENT_ID);
+    	String name = "Cli\u00EBnt";
+		client.setName(name);
+    	
+    	ClientRepresentation updatedClient = reg.update(client);
+    	assertEquals(name, updatedClient.getName());
     }
 
     private void deleteClient(ClientRepresentation client) throws ClientRegistrationException {

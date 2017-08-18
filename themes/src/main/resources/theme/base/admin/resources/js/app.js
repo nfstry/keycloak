@@ -125,6 +125,12 @@ module.config(['$translateProvider', function($translateProvider) {
     $translateProvider.translations(locale, resourceBundle);
 }]);
 
+// Change for upgrade to AngularJS 1.6
+// See https://github.com/angular/angular.js/commit/aa077e81129c740041438688dff2e8d20c3d7b52
+module.config(['$locationProvider', function($locationProvider) {
+  $locationProvider.hashPrefix('');
+}]);
+
 module.config([ '$routeProvider', function($routeProvider) {
     $routeProvider
         .when('/create/realm', {
@@ -549,6 +555,15 @@ module.config([ '$routeProvider', function($routeProvider) {
                 }
             },
             controller : 'RealmImportCtrl'
+        })
+        .when('/realms/:realm/partial-export', {
+            templateUrl : resourceUrl + '/partials/partial-export.html',
+            resolve : {
+                realm : function(RealmLoader) {
+                    return RealmLoader();
+                }
+            },
+            controller : 'RealmExportCtrl'
         })
         .when('/create/user/:realm', {
             templateUrl : resourceUrl + '/partials/user-detail.html',
@@ -1389,9 +1404,6 @@ module.config([ '$routeProvider', function($routeProvider) {
                 realm : function(RealmLoader) {
                     return RealmLoader();
                 },
-                clients : function(ClientListLoader) {
-                    return ClientListLoader();
-                },
                 serverInfo : function(ServerInfoLoader) {
                     return ServerInfoLoader();
                 }
@@ -1703,8 +1715,8 @@ module.config([ '$routeProvider', function($routeProvider) {
                 flows : function(AuthenticationFlowsLoader) {
                     return AuthenticationFlowsLoader();
                 },
-                serverInfo : function(ServerInfo) {
-                    return ServerInfo.delay;
+                serverInfo : function(ServerInfoLoader) {
+                    return ServerInfoLoader();
                 }
             },
             controller : 'RealmFlowBindingCtrl'
@@ -1943,9 +1955,13 @@ module.factory('errorInterceptor', function($q, $window, $rootScope, $location, 
             } else if (response.status) {
                 if (response.data && response.data.errorMessage) {
                     Notifications.error(response.data.errorMessage);
+                } else if (response.data && response.data.error_description) {
+                    Notifications.error(response.data.error_description);
                 } else {
                     Notifications.error("An unexpected server error has occurred");
                 }
+            } else {
+                Notifications.error("No response from server.");
             }
             return $q.reject(response);
         }
@@ -2168,14 +2184,28 @@ module.directive('kcEnter', function() {
     };
 });
 
-module.directive('kcSave', function ($compile, Notifications) {
+module.directive('kcSave', function ($compile, $timeout, Notifications) {
+    var clickDelay = 500; // 500 ms
+    
     return {
         restrict: 'A',
         link: function ($scope, elem, attr, ctrl) {
             elem.addClass("btn btn-primary");
             elem.attr("type","submit");
-            elem.bind('click', function() {
+            
+            var disabled = false;
+            elem.on('click', function(evt) {
                 if ($scope.hasOwnProperty("changed") && !$scope.changed) return;
+                
+                // KEYCLOAK-4121: Prevent double form submission
+                if (disabled) {
+                    evt.preventDefault();
+                    evt.stopImmediatePropagation();
+                    return;
+                } else {
+                    disabled = true;
+                    $timeout(function () { disabled = false; }, clickDelay, false);
+                }
                 
                 $scope.$apply(function() {
                     var form = elem.closest('form');
@@ -2331,12 +2361,39 @@ module.directive('kcTabsAuthentication', function () {
     }
 });
 
+module.directive('kcTabsRole', function () {
+    return {
+        scope: true,
+        restrict: 'E',
+        replace: true,
+        templateUrl: resourceUrl + '/templates/kc-tabs-role.html'
+    }
+});
+
+module.directive('kcTabsClientRole', function () {
+    return {
+        scope: true,
+        restrict: 'E',
+        replace: true,
+        templateUrl: resourceUrl + '/templates/kc-tabs-client-role.html'
+    }
+});
+
 module.directive('kcTabsUser', function () {
     return {
         scope: true,
         restrict: 'E',
         replace: true,
         templateUrl: resourceUrl + '/templates/kc-tabs-user.html'
+    }
+});
+
+module.directive('kcTabsUsers', function () {
+    return {
+        scope: true,
+        restrict: 'E',
+        replace: true,
+        templateUrl: resourceUrl + '/templates/kc-tabs-users.html'
     }
 });
 

@@ -103,9 +103,9 @@ public class SAMLParserTest {
             assertNotNull(rtChoiceType.getEncryptedAssertion());
 
             PrivateKey privateKey = DerUtils.decodePrivateKey(Base64.decode(PRIVATE_KEY));
-            ResponseType rtWithDecryptedAssertion = AssertionUtil.decryptAssertion(resp, privateKey);
+            AssertionUtil.decryptAssertion(resp, privateKey);
 
-            rtChoiceType = rtWithDecryptedAssertion.getAssertions().get(0);
+            rtChoiceType = resp.getAssertions().get(0);
             assertNotNull(rtChoiceType.getAssertion());
             assertNull(rtChoiceType.getEncryptedAssertion());
         }
@@ -198,6 +198,22 @@ public class SAMLParserTest {
         try (InputStream st = SAMLParserTest.class.getResourceAsStream("KEYCLOAK-4236-AttributeProfile-element.xml")) {
             Object parsedObject = parser.parse(st);
             assertThat(parsedObject, instanceOf(EntityDescriptorType.class));
+        }
+    }
+
+    @Test
+    public void testEmptyAttributeValue() throws Exception {
+        try (InputStream st = SAMLParserTest.class.getResourceAsStream("KEYCLOAK-4790-Empty-attribute-value.xml")) {
+            Object parsedObject = parser.parse(st);
+            assertThat(parsedObject, instanceOf(ResponseType.class));
+        }
+    }
+
+    @Test
+    public void testEmptyAttributeValueLast() throws Exception {
+        try (InputStream st = SAMLParserTest.class.getResourceAsStream("KEYCLOAK-4790-Empty-attribute-value-last.xml")) {
+            Object parsedObject = parser.parse(st);
+            assertThat(parsedObject, instanceOf(ResponseType.class));
         }
     }
 }

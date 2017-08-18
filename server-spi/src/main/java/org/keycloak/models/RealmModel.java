@@ -127,6 +127,8 @@ public interface RealmModel extends RoleContainerModel {
     //--- brute force settings
     boolean isBruteForceProtected();
     void setBruteForceProtected(boolean value);
+    boolean isPermanentLockout();
+    void setPermanentLockout(boolean val);
     int getMaxFailureWaitSeconds();
     void setMaxFailureWaitSeconds(int val);
     int getWaitIncrementSeconds();
@@ -189,6 +191,12 @@ public interface RealmModel extends RoleContainerModel {
 
     void setAccessCodeLifespanLogin(int seconds);
 
+    int getActionTokenGeneratedByAdminLifespan();
+    void setActionTokenGeneratedByAdminLifespan(int seconds);
+
+    int getActionTokenGeneratedByUserLifespan();
+    void setActionTokenGeneratedByUserLifespan(int seconds);
+
     List<RequiredCredentialModel> getRequiredCredentials();
 
     void addRequiredCredential(String cred);
@@ -242,6 +250,9 @@ public interface RealmModel extends RoleContainerModel {
 
     AuthenticationFlowModel getClientAuthenticationFlow();
     void setClientAuthenticationFlow(AuthenticationFlowModel flow);
+
+    AuthenticationFlowModel getDockerAuthenticationFlow();
+    void setDockerAuthenticationFlow(AuthenticationFlowModel flow);
 
     List<AuthenticationFlowModel> getAuthenticationFlows();
     AuthenticationFlowModel getFlowByAlias(String alias);

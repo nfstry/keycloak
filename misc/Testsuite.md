@@ -29,6 +29,15 @@ When starting the server it can also import a realm from a json file:
 
     mvn exec:java -Pkeycloak-server -Dimport=testrealm.json
     
+When starting the server, https transport can be set up by setting keystore containing the server certificate
+and https port, optionally setting the truststore.
+
+    mvn exec:java -Pkeycloak-server \
+        -Djavax.net.ssl.trustStore=/path/to/truststore.jks \
+        -Djavax.net.ssl.keyStore=/path/to/keystore.jks \
+        -Djavax.net.ssl.keyStorePassword=CHANGEME \
+        -Dkeycloak.port.https=8443
+
 ### Live edit of html and styles
 
 The Keycloak test server can load resources directly from the filesystem instead of the classpath. This allows editing html, styles and updating images without restarting the server. To make the server use resources from the filesystem start with:
@@ -132,6 +141,12 @@ kinit hnelson@KEYCLOAK.ORG
 and provide password `secret`
 
 Now when you access `http://localhost:8081/auth/realms/master/account` you should be logged in automatically as user `hnelson` .
+
+Simple loadbalancer
+-------------------
+
+You can run class `SimpleUndertowLoadBalancer` from IDE. By default, it executes the embedded undertow loadbalancer running on `http://localhost:8180`, which communicates with 2 backend Keycloak nodes 
+running on `http://localhost:8181` and `http://localhost:8182` . See javadoc for more details.
  
 
 Create many users or offline sessions

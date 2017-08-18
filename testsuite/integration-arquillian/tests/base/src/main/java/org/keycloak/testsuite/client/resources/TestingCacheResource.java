@@ -17,13 +17,18 @@
 
 package org.keycloak.testsuite.client.resources;
 
+import java.util.Map;
 import java.util.Set;
 
+import javax.ws.rs.Consumes;
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
 import javax.ws.rs.core.MediaType;
+
+import org.keycloak.testsuite.rest.representation.JGroupsStats;
+import org.keycloak.testsuite.rest.representation.RemoteCacheStats;
 
 /**
  * @author <a href="mailto:mposolda@redhat.com">Marek Posolda</a>
@@ -47,5 +52,25 @@ public interface TestingCacheResource {
     @Path("/size")
     @Produces(MediaType.APPLICATION_JSON)
     int size();
+
+    @GET
+    @Path("/clear")
+    @Consumes(MediaType.TEXT_PLAIN)
+    void clear();
+
+    @GET
+    @Path("/jgroups-stats")
+    @Produces(MediaType.APPLICATION_JSON)
+    JGroupsStats getJgroupsStats();
+
+    @GET
+    @Path("/remote-cache-stats")
+    @Produces(MediaType.APPLICATION_JSON)
+    RemoteCacheStats getRemoteCacheStats();
+
+    @GET
+    @Path("/remote-cache-last-session-refresh/{user-session-id}")
+    @Produces(MediaType.APPLICATION_JSON)
+    int getRemoteCacheLastSessionRefresh(@PathParam("user-session-id") String userSessionId);
 
 }

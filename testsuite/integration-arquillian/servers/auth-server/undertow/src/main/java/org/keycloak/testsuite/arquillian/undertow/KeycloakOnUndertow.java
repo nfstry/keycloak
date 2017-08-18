@@ -41,10 +41,15 @@ import org.jboss.shrinkwrap.api.spec.WebArchive;
 import org.jboss.shrinkwrap.descriptor.api.Descriptor;
 import org.jboss.shrinkwrap.undertow.api.UndertowWebArchive;
 import org.keycloak.common.util.reflections.Reflections;
+import org.keycloak.connections.infinispan.InfinispanConnectionProvider;
+import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.KeycloakSessionFactory;
 import org.keycloak.services.filters.KeycloakSessionServletFilter;
+import org.keycloak.services.managers.ApplianceBootstrap;
 import org.keycloak.services.resources.KeycloakApplication;
 
+import org.keycloak.util.JsonSerialization;
+import java.io.IOException;
 import javax.servlet.DispatcherType;
 import javax.servlet.ServletException;
 
@@ -52,6 +57,7 @@ import java.lang.reflect.Field;
 import java.util.Collection;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.logging.Level;
 
 public class KeycloakOnUndertow implements DeployableContainer<KeycloakOnUndertowConfiguration> {
 
@@ -72,6 +78,14 @@ public class KeycloakOnUndertow implements DeployableContainer<KeycloakOnUnderto
         di.setContextPath("/auth");
         di.setDeploymentName("Keycloak");
         di.addInitParameter(KeycloakApplication.KEYCLOAK_EMBEDDED, "true");
+        if (configuration.getKeycloakConfigPropertyOverridesMap() != null) {
+            try {
+                di.addInitParameter(KeycloakApplication.SERVER_CONTEXT_CONFIG_PROPERTY_OVERRIDES,
+                  JsonSerialization.writeValueAsString(configuration.getKeycloakConfigPropertyOverridesMap()));
+            } catch (IOException ex) {
+                throw new RuntimeException(ex);
+            }
+        }
 
         di.setDefaultServletConfig(new DefaultServletConfig(true));
         di.addWelcomePage("theme/keycloak/welcome/resources/index.html");
@@ -106,6 +120,11 @@ public class KeycloakOnUndertow implements DeployableContainer<KeycloakOnUnderto
 
     @Override
     public ProtocolMetaData deploy(Archive<?> archive) throws DeploymentException {
+        if (isRemoteMode()) {
+            log.infof("Skipped deployment of '%s' as we are in remote mode!", archive.getName());
+            return new ProtocolMetaData();
+        }
+
         DeploymentInfo di = getDeplotymentInfoFromArchive(archive);
 
         ClassLoader parentCl = Thread.currentThread().getContextClassLoader();
@@ -152,7 +171,7 @@ public class KeycloakOnUndertow implements DeployableContainer<KeycloakOnUnderto
             return;
         }
 
-        log.info("Starting auth server on embedded Undertow.");
+        log.infof("Starting auth server on embedded Undertow on: http://%s:%d", configuration.getBindAddress(), configuration.getBindHttpPort());
         long start = System.currentTimeMillis();
 
         if (undertow == null) {
@@ -164,13 +183,32 @@ public class KeycloakOnUndertow implements DeployableContainer<KeycloakOnUnderto
                         .setIoThreads(configuration.getWorkerThreads() / 8)
         );
 
+        if (configuration.getRoute() != null) {
+            log.info("Using route: " + configuration.getRoute());
+        }
+
         DeploymentInfo di = createAuthServerDeploymentInfo();
         undertow.deploy(di);
         ResteasyDeployment deployment = (ResteasyDeployment) di.getServletContextAttributes().get(ResteasyDeployment.class.getName());
         sessionFactory = ((KeycloakApplication) deployment.getApplication()).getSessionFactory();
 
+        setupDevConfig();
 
         log.info("Auth server started in " + (System.currentTimeMillis() - start) + " ms\n");
+    }
+
+
+    protected void setupDevConfig() {
+        KeycloakSession session = sessionFactory.create();
+        try {
+            session.getTransactionManager().begin();
+            if (new ApplianceBootstrap(session).isNoMasterUser()) {
+                new ApplianceBootstrap(session).createMasterRealmUser("admin", "admin");
+            }
+            session.getTransactionManager().commit();
+        } finally {
+            session.close();
+        }
     }
 
     @Override
@@ -187,24 +225,31 @@ public class KeycloakOnUndertow implements DeployableContainer<KeycloakOnUnderto
 
     private boolean isRemoteMode() {
         //return true;
-        return "true".equals(System.getProperty("remote.mode"));
+        return configuration.isRemoteMode();
     }
 
     @Override
     public void undeploy(Archive<?> archive) throws DeploymentException {
+        if (isRemoteMode()) {
+            log.infof("Skipped undeployment of '%s' as we are in remote mode!", archive.getName());
+            return;
+        }
+
         Field containerField = Reflections.findDeclaredField(UndertowJaxrsServer.class, "container");
         Reflections.setAccessible(containerField);
         ServletContainer container = (ServletContainer) Reflections.getFieldValue(containerField, undertow);
 
-        DeploymentManager deployment = container.getDeployment(archive.getName());
-        if (deployment != null) {
+        DeploymentManager deploymentMgr = container.getDeployment(archive.getName());
+        if (deploymentMgr != null) {
+            DeploymentInfo deployment = deploymentMgr.getDeployment().getDeploymentInfo();
+
             try {
-                deployment.stop();
+                deploymentMgr.stop();
             } catch (ServletException se) {
                 throw new DeploymentException(se.getMessage(), se);
             }
 
-            deployment.undeploy();
+            deploymentMgr.undeploy();
 
             Field rootField = Reflections.findDeclaredField(UndertowJaxrsServer.class, "root");
             Reflections.setAccessible(rootField);
@@ -212,6 +257,8 @@ public class KeycloakOnUndertow implements DeployableContainer<KeycloakOnUnderto
 
             String path = deployedArchivesToContextPath.get(archive.getName());
             root.removePrefixPath(path);
+
+            container.removeDeployment(deployment);
         } else {
             log.warnf("Deployment '%s' not found", archive.getName());
         }

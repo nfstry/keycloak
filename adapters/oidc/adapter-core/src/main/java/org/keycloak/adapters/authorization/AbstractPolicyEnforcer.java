@@ -29,6 +29,7 @@ import org.keycloak.KeycloakSecurityContext;
 import org.keycloak.adapters.OIDCHttpFacade;
 import org.keycloak.adapters.spi.HttpFacade.Request;
 import org.keycloak.authorization.client.AuthzClient;
+import org.keycloak.authorization.client.ClientAuthorizationContext;
 import org.keycloak.representations.AccessToken;
 import org.keycloak.representations.adapters.config.PolicyEnforcerConfig;
 import org.keycloak.representations.adapters.config.PolicyEnforcerConfig.EnforcementMode;
@@ -77,13 +78,13 @@ public abstract class AbstractPolicyEnforcer {
 
                 if (pathConfig == null) {
                     if (EnforcementMode.PERMISSIVE.equals(enforcementMode)) {
-                        return createAuthorizationContext(accessToken);
+                        return createAuthorizationContext(accessToken, null);
                     }
 
                     LOGGER.debugf("Could not find a configuration for path [%s]", path);
 
                     if (isDefaultAccessDeniedUri(request, enforcerConfig)) {
-                        return createAuthorizationContext(accessToken);
+                        return createAuthorizationContext(accessToken, null);
                     }
 
                     handleAccessDenied(httpFacade);
@@ -99,7 +100,7 @@ public abstract class AbstractPolicyEnforcer {
 
                 if (isAuthorized(pathConfig, requiredScopes, accessToken, httpFacade)) {
                     try {
-                        return createAuthorizationContext(accessToken);
+                        return createAuthorizationContext(accessToken, pathConfig);
                     } catch (Exception e) {
                         throw new RuntimeException("Error processing path [" + pathConfig.getPath() + "].", e);
                     }
@@ -203,7 +204,7 @@ public abstract class AbstractPolicyEnforcer {
     }
 
     private AuthorizationContext createEmptyAuthorizationContext(final boolean granted) {
-        return new AuthorizationContext() {
+        return new ClientAuthorizationContext(authzClient) {
             @Override
             public boolean hasPermission(String resourceName, String scopeName) {
                 return granted;
@@ -251,8 +252,8 @@ public abstract class AbstractPolicyEnforcer {
         return requiredScopes;
     }
 
-    private AuthorizationContext createAuthorizationContext(AccessToken accessToken) {
-        return new AuthorizationContext(accessToken, this.paths);
+    private AuthorizationContext createAuthorizationContext(AccessToken accessToken, PathConfig pathConfig) {
+        return new ClientAuthorizationContext(accessToken, pathConfig, this.paths, authzClient);
     }
 
     private boolean isResourcePermission(PathConfig actualPathConfig, Permission permission) {

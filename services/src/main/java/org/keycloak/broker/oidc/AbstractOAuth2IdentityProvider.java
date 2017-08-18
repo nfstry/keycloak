@@ -37,6 +37,7 @@ import org.keycloak.services.messages.Messages;
 
 import javax.ws.rs.GET;
 import javax.ws.rs.QueryParam;
+import javax.ws.rs.WebApplicationException;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.HttpHeaders;
 import javax.ws.rs.core.Response;
@@ -154,7 +155,7 @@ public abstract class AbstractOAuth2IdentityProvider<C extends OAuth2IdentityPro
     protected UriBuilder createAuthorizationUrl(AuthenticationRequest request) {
         return UriBuilder.fromUri(getConfig().getAuthorizationUrl())
                 .queryParam(OAUTH2_PARAMETER_SCOPE, getConfig().getDefaultScope())
-                .queryParam(OAUTH2_PARAMETER_STATE, request.getState())
+                .queryParam(OAUTH2_PARAMETER_STATE, request.getState().getEncodedState())
                 .queryParam(OAUTH2_PARAMETER_RESPONSE_TYPE, "code")
                 .queryParam(OAUTH2_PARAMETER_CLIENT_ID, getConfig().getClientId())
                 .queryParam(OAUTH2_PARAMETER_REDIRECT_URI, request.getRedirectUri());
@@ -240,6 +241,8 @@ public abstract class AbstractOAuth2IdentityProvider<C extends OAuth2IdentityPro
 
                     return callback.authenticated(federatedIdentity);
                 }
+            } catch (WebApplicationException e) {
+                return e.getResponse();
             } catch (Exception e) {
                 logger.error("Failed to make identity provider oauth callback", e);
             }

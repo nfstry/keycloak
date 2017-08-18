@@ -159,6 +159,9 @@ public class RealmEntity {
     @JoinTable(name="REALM_DEFAULT_GROUPS", joinColumns = { @JoinColumn(name="REALM_ID")}, inverseJoinColumns = { @JoinColumn(name="GROUP_ID")})
     protected Collection<GroupEntity> defaultGroups = new ArrayList<>();
 
+    @OneToMany(fetch = FetchType.LAZY, cascade ={CascadeType.REMOVE}, orphanRemoval = true, mappedBy = "realm")
+    protected Collection<GroupEntity> groups = new ArrayList<>();
+
     @Column(name="EVENTS_ENABLED")
     protected boolean eventsEnabled;
     @Column(name="EVENTS_EXPIRATION")
@@ -199,6 +202,9 @@ public class RealmEntity {
     @OneToMany(cascade ={CascadeType.REMOVE}, orphanRemoval = true, mappedBy = "realm")
     Collection<AuthenticationFlowEntity> authenticationFlows = new ArrayList<>();
 
+    @OneToMany(fetch = FetchType.LAZY, cascade ={CascadeType.ALL}, orphanRemoval = true, mappedBy = "realm")
+    Set<ComponentEntity> components = new HashSet<>();
+
     @Column(name="BROWSER_FLOW")
     protected String browserFlow;
 
@@ -214,6 +220,8 @@ public class RealmEntity {
     @Column(name="CLIENT_AUTH_FLOW")
     protected String clientAuthenticationFlow;
 
+    @Column(name="DOCKER_AUTH_FLOW")
+    protected String dockerAuthenticationFlow;
 
 
     @Column(name="INTERNATIONALIZATION_ENABLED")
@@ -426,6 +434,14 @@ public class RealmEntity {
         this.defaultGroups = defaultGroups;
     }
 
+    public Collection<GroupEntity> getGroups() {
+        return groups;
+    }
+
+    public void setGroups(Collection<GroupEntity> groups) {
+        this.groups = groups;
+    }
+
     public String getPasswordPolicy() {
         return passwordPolicy;
     }
@@ -623,6 +639,14 @@ public class RealmEntity {
         this.authenticationFlows = authenticationFlows;
     }
 
+    public Set<ComponentEntity> getComponents() {
+        return components;
+    }
+
+    public void setComponents(Set<ComponentEntity> components) {
+        this.components = components;
+    }
+
     public String getOtpPolicyType() {
         return otpPolicyType;
     }
@@ -709,6 +733,15 @@ public class RealmEntity {
 
     public void setClientAuthenticationFlow(String clientAuthenticationFlow) {
         this.clientAuthenticationFlow = clientAuthenticationFlow;
+    }
+
+    public String getDockerAuthenticationFlow() {
+        return dockerAuthenticationFlow;
+    }
+
+    public RealmEntity setDockerAuthenticationFlow(String dockerAuthenticationFlow) {
+        this.dockerAuthenticationFlow = dockerAuthenticationFlow;
+        return this;
     }
 
     public Collection<ClientTemplateEntity> getClientTemplates() {

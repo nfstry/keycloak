@@ -16,7 +16,6 @@
  */
 package org.keycloak.testsuite.arquillian;
 
-import org.jboss.arquillian.container.spi.Container;
 import org.jboss.arquillian.container.spi.ContainerRegistry;
 import org.jboss.arquillian.container.spi.event.StartContainer;
 import org.jboss.arquillian.container.spi.event.StartSuiteContainers;
@@ -41,10 +40,11 @@ import org.keycloak.testsuite.util.OAuthClient;
 import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
-import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 
+import java.util.stream.Collectors;
 import javax.ws.rs.NotFoundException;
 
 /**
@@ -54,7 +54,7 @@ import javax.ws.rs.NotFoundException;
  */
 public class AuthServerTestEnricher {
 
-    protected final Logger log = Logger.getLogger(this.getClass());
+    protected static final Logger log = Logger.getLogger(AuthServerTestEnricher.class);
 
     @Inject
     private Instance<ContainerRegistry> containerRegistry;
@@ -68,11 +68,25 @@ public class AuthServerTestEnricher {
     private static final String AUTH_SERVER_CONTAINER_PROPERTY = "auth.server.container";
     public static final String AUTH_SERVER_CONTAINER = System.getProperty(AUTH_SERVER_CONTAINER_PROPERTY, AUTH_SERVER_CONTAINER_DEFAULT);
 
+    private static final String AUTH_SERVER_BACKEND_DEFAULT = AUTH_SERVER_CONTAINER + "-backend";
+    private static final String AUTH_SERVER_BACKEND_PROPERTY = "auth.server.backend";
+    public static final String AUTH_SERVER_BACKEND = System.getProperty(AUTH_SERVER_BACKEND_PROPERTY, AUTH_SERVER_BACKEND_DEFAULT);
+
+    private static final String AUTH_SERVER_BALANCER_DEFAULT = "auth-server-balancer";
+    private static final String AUTH_SERVER_BALANCER_PROPERTY = "auth.server.balancer";
+    public static final String AUTH_SERVER_BALANCER = System.getProperty(AUTH_SERVER_BALANCER_PROPERTY, AUTH_SERVER_BALANCER_DEFAULT);
+
     private static final String AUTH_SERVER_CLUSTER_PROPERTY = "auth.server.cluster";
     public static final boolean AUTH_SERVER_CLUSTER = Boolean.parseBoolean(System.getProperty(AUTH_SERVER_CLUSTER_PROPERTY, "false"));
+    private static final String AUTH_SERVER_CROSS_DC_PROPERTY = "auth.server.crossdc";
+    public static final boolean AUTH_SERVER_CROSS_DC = Boolean.parseBoolean(System.getProperty(AUTH_SERVER_CROSS_DC_PROPERTY, "false"));
 
     private static final Boolean START_MIGRATION_CONTAINER = "auto".equals(System.getProperty("migration.mode")) || 
             "manual".equals(System.getProperty("migration.mode"));
+
+    // In manual mode are all containers despite loadbalancers started in mode "manual" and nothing is managed through "suite".
+    // Useful for tests, which require restart servers etc.
+    private static final String MANUAL_MODE = "manual.mode";
 
     @Inject
     @SuiteScoped
@@ -104,38 +118,99 @@ public class AuthServerTestEnricher {
     }
 
     public void initializeSuiteContext(@Observes(precedence = 2) BeforeSuite event) {
+        Set<ContainerInfo> containers = containerRegistry.get().getContainers().stream()
+          .map(ContainerInfo::new)
+          .collect(Collectors.toSet());
 
-        Set<ContainerInfo> containers = new LinkedHashSet<>();
-        for (Container c : containerRegistry.get().getContainers()) {
-            containers.add(new ContainerInfo(c));
-        }
+        // A way to specify that containers should be in mode "manual" rather then "suite"
+        checkManualMode(containers);
 
         suiteContext = new SuiteContext(containers);
 
-        String authServerFrontend = AUTH_SERVER_CLUSTER
-                ? "auth-server-balancer-wildfly" // if cluster mode enabled, load-balancer is the frontend
-                : AUTH_SERVER_CONTAINER; // single-node mode
-        String authServerBackend = AUTH_SERVER_CONTAINER + "-backend";
-        int backends = 0;
-        for (ContainerInfo container : suiteContext.getContainers()) {
-            // frontend
-            if (container.getQualifier().equals(authServerFrontend)) {
-                updateWithAuthServerInfo(container);
-                suiteContext.setAuthServerInfo(container);
-            }
-            // backends
-            if (AUTH_SERVER_CLUSTER && container.getQualifier().startsWith(authServerBackend)) {
-                updateWithAuthServerInfo(container, ++backends);
-                suiteContext.getAuthServerBackendsInfo().add(container);
-            }
-        }
+        if (AUTH_SERVER_CROSS_DC) {
+            // if cross-dc mode enabled, load-balancer is the frontend of datacenter cluster
+            containers.stream()
+              .filter(c -> c.getQualifier().startsWith(AUTH_SERVER_BALANCER + "-cross-dc"))
+              .forEach(c -> {
+                String portOffsetString = c.getArquillianContainer().getContainerConfiguration().getContainerProperties().getOrDefault("bindHttpPortOffset", "0");
+                String dcString = c.getArquillianContainer().getContainerConfiguration().getContainerProperties().getOrDefault("dataCenter", "0");
+                updateWithAuthServerInfo(c, Integer.valueOf(portOffsetString));
+                suiteContext.addAuthServerInfo(Integer.valueOf(dcString), c);
+              });
 
-        // validate auth server setup
-        if (suiteContext.getAuthServerInfo() == null) {
-            throw new RuntimeException(String.format("No auth server container matching '%s' found in arquillian.xml.", authServerFrontend));
-        }
-        if (AUTH_SERVER_CLUSTER && suiteContext.getAuthServerBackendsInfo().isEmpty()) {
-            throw new RuntimeException(String.format("No auth server container matching '%sN' found in arquillian.xml.", authServerBackend));
+            if (suiteContext.getDcAuthServerInfo().isEmpty()) {
+                throw new IllegalStateException("Not found frontend container (load balancer): " + AUTH_SERVER_BALANCER);
+            }
+            if (suiteContext.getDcAuthServerInfo().stream().anyMatch(Objects::isNull)) {
+                throw new IllegalStateException("Frontend container (load balancer) misconfiguration");
+            }
+
+            containers.stream()
+              .filter(c -> c.getQualifier().startsWith(AUTH_SERVER_CONTAINER + "-cross-dc-"))
+              .sorted((a, b) -> a.getQualifier().compareTo(b.getQualifier()))
+              .forEach(c -> {
+                String portOffsetString = c.getArquillianContainer().getContainerConfiguration().getContainerProperties().getOrDefault("bindHttpPortOffset", "0");
+                String dcString = c.getArquillianContainer().getContainerConfiguration().getContainerProperties().getOrDefault("dataCenter", "0");
+                updateWithAuthServerInfo(c, Integer.valueOf(portOffsetString));
+                suiteContext.addAuthServerBackendsInfo(Integer.valueOf(dcString), c);
+              });
+
+            containers.stream()
+                    .filter(c -> c.getQualifier().startsWith("cache-server-cross-dc-"))
+                    .sorted((a, b) -> a.getQualifier().compareTo(b.getQualifier()))
+                    .forEach(containerInfo -> {
+                        int prefixSize = "cache-server-cross-dc-".length();
+                        int dcIndex = Integer.parseInt(containerInfo.getQualifier().substring(prefixSize)) -1;
+                        suiteContext.addCacheServerInfo(dcIndex, containerInfo);
+                    });
+
+            if (suiteContext.getDcAuthServerInfo().isEmpty()) {
+                throw new RuntimeException(String.format("No auth server container matching '%s' found in arquillian.xml.", AUTH_SERVER_BACKEND));
+            }
+            if (suiteContext.getDcAuthServerBackendsInfo().stream().anyMatch(Objects::isNull)) {
+                throw new IllegalStateException("Frontend container (load balancer) misconfiguration");
+            }
+            if (suiteContext.getDcAuthServerBackendsInfo().stream().anyMatch(List::isEmpty)) {
+                throw new RuntimeException(String.format("Some data center has no auth server container matching '%s' defined in arquillian.xml.", AUTH_SERVER_BACKEND));
+            }
+            boolean cacheServerLifecycleSkip = Boolean.parseBoolean(System.getProperty("cache.server.lifecycle.skip"));
+            if (suiteContext.getCacheServersInfo().isEmpty() && !cacheServerLifecycleSkip) {
+                throw new IllegalStateException("Cache containers misconfiguration");
+            }
+
+            log.info("Using frontend containers: " + this.suiteContext.getDcAuthServerInfo().stream()
+              .map(ContainerInfo::getQualifier)
+              .collect(Collectors.joining(", ")));
+        } else if (AUTH_SERVER_CLUSTER) {
+            // if cluster mode enabled, load-balancer is the frontend
+            ContainerInfo container = containers.stream()
+              .filter(c -> c.getQualifier().startsWith(AUTH_SERVER_BALANCER))
+              .findAny()
+              .orElseThrow(() -> new IllegalStateException("Not found frontend container: " + AUTH_SERVER_BALANCER));
+            updateWithAuthServerInfo(container);
+            suiteContext.setAuthServerInfo(container);
+
+            containers.stream()
+              .filter(c -> c.getQualifier().startsWith(AUTH_SERVER_BACKEND))
+              .forEach(c -> {
+                String portOffsetString = c.getArquillianContainer().getContainerConfiguration().getContainerProperties().getOrDefault("bindHttpPortOffset", "0");
+                updateWithAuthServerInfo(c, Integer.valueOf(portOffsetString));
+                suiteContext.addAuthServerBackendsInfo(0, c);
+              });
+
+            if (suiteContext.getAuthServerBackendsInfo().isEmpty()) {
+                throw new RuntimeException(String.format("No auth server container matching '%s' found in arquillian.xml.", AUTH_SERVER_BACKEND));
+            }
+
+            log.info("Using frontend container: " + container.getQualifier());
+        } else {
+            // frontend-only
+            ContainerInfo container = containers.stream()
+              .filter(c -> c.getQualifier().startsWith(AUTH_SERVER_CONTAINER))
+              .findAny()
+              .orElseThrow(() -> new IllegalStateException("Not found frontend container: " + AUTH_SERVER_CONTAINER));
+            updateWithAuthServerInfo(container);
+            suiteContext.setAuthServerInfo(container);
         }
 
         if (START_MIGRATION_CONTAINER) {
@@ -178,7 +253,7 @@ public class AuthServerTestEnricher {
         }
     }
 
-    public void runPreMigrationTask(@Observes(precedence = 2) StartSuiteContainers event) {
+    public void runPreMigrationTask(@Observes(precedence = 2) StartSuiteContainers event) throws Exception {
         if (suiteContext.isAuthServerMigrationEnabled()) {
             log.info("\n\n### Run preMigration task on keycloak " + System.getProperty("migrated.auth.server.version", "- previous") + " ###\n\n");
             suiteContext.getMigrationContext().runPreMigrationTask();
@@ -206,6 +281,8 @@ public class AuthServerTestEnricher {
     }
 
     public void initializeOAuthClient(@Observes(precedence = 3) BeforeClass event) {
+        // TODO workaround. Check if can be removed
+        OAuthClient.updateURLs(suiteContext.getAuthServerInfo().getContextRoot().toString());
         OAuthClient oAuthClient = new OAuthClient();
         oAuthClientProducer.set(oAuthClient);
     }
@@ -213,10 +290,23 @@ public class AuthServerTestEnricher {
     public void afterClass(@Observes(precedence = 2) AfterClass event) {
         TestContext testContext = testContextProducer.get();
 
-        List<RealmRepresentation> testRealmReps = testContext.getTestRealmReps();
         Keycloak adminClient = testContext.getAdminClient();
         KeycloakTestingClient testingClient = testContext.getTestingClient();
 
+        removeTestRealms(testContext, adminClient);
+
+        if (adminClient != null) {
+            adminClient.close();
+        }
+
+        if (testingClient != null) {
+            testingClient.close();
+        }
+    }
+
+
+    public static void removeTestRealms(TestContext testContext, Keycloak adminClient) {
+        List<RealmRepresentation> testRealmReps = testContext.getTestRealmReps();
         if (testRealmReps != null) {
             log.info("removing test realms after test class");
             for (RealmRepresentation testRealm : testRealmReps) {
@@ -229,13 +319,20 @@ public class AuthServerTestEnricher {
                 }
             }
         }
+    }
 
-        if (adminClient != null) {
-            adminClient.close();
-        }
 
-        if (testingClient != null) {
-            testingClient.close();
+    private void checkManualMode(Set<ContainerInfo> containers) {
+        String manualMode = System.getProperty(MANUAL_MODE);
+
+        if (Boolean.parseBoolean(manualMode)) {
+
+            containers.stream()
+                    .filter(containerInfo -> !containerInfo.getQualifier().contains("balancer"))
+                    .forEach(containerInfo -> {
+                        log.infof("Container '%s' will be in manual mode", containerInfo.getQualifier());
+                        containerInfo.getArquillianContainer().getContainerConfiguration().setMode("manual");
+                    });
         }
     }
 

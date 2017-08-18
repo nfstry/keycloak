@@ -21,7 +21,7 @@
     <parent>
         <groupId>org.keycloak.testsuite</groupId>
         <artifactId>integration-arquillian-servers-auth-server</artifactId>
-        <version>3.1.0.CR1-SNAPSHOT</version>
+        <version>3.3.0.CR1-SNAPSHOT</version>
     </parent>
     <modelVersion>4.0.0</modelVersion>
 
@@ -309,6 +309,7 @@
                                                 <artifactId>${auth.server.overlay.artifactId}</artifactId>
                                                 <version>${auth.server.overlay.version}</version>
                                                 <type>zip</type>
+                                                <overWrite>true</overWrite>
                                                 <outputDirectory>${project.build.directory}/unpacked/${overlaid.container.unpacked.folder.name}</outputDirectory>
                                             </artifactItem>
                                         </artifactItems>

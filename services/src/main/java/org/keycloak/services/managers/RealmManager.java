@@ -47,6 +47,7 @@ import org.keycloak.representations.idm.OAuthClientRepresentation;
 import org.keycloak.representations.idm.RealmEventsConfigRepresentation;
 import org.keycloak.representations.idm.RealmRepresentation;
 import org.keycloak.representations.idm.RoleRepresentation;
+import org.keycloak.sessions.AuthenticationSessionProvider;
 import org.keycloak.storage.UserStorageProviderModel;
 import org.keycloak.services.clientregistration.policy.DefaultClientRegistrationPolicies;
 
@@ -158,7 +159,6 @@ public class RealmManager {
             ClientModel realmAdminApp = realm.getClientByClientId(realmAdminApplicationClientId);
             adminRole = realmAdminApp.getRole(AdminRoles.REALM_ADMIN);
         }
-        adminConsole.addScopeMapping(adminRole);
     }
 
     protected void setupAdminConsoleLocaleMapper(RealmModel realm) {
@@ -193,10 +193,21 @@ public class RealmManager {
                 ClientModel realmAdminApp = realm.getClientByClientId(realmAdminApplicationClientId);
                 adminRole = realmAdminApp.getRole(AdminRoles.REALM_ADMIN);
             }
-            adminCli.addScopeMapping(adminRole);
         }
 
     }
+    public void addQueryCompositeRoles(ClientModel realmAccess) {
+        RoleModel queryClients = realmAccess.getRole(AdminRoles.QUERY_CLIENTS);
+        RoleModel queryUsers = realmAccess.getRole(AdminRoles.QUERY_USERS);
+        RoleModel queryGroups = realmAccess.getRole(AdminRoles.QUERY_GROUPS);
+
+        RoleModel viewClients = realmAccess.getRole(AdminRoles.VIEW_CLIENTS);
+        viewClients.addCompositeRole(queryClients);
+        RoleModel viewUsers = realmAccess.getRole(AdminRoles.VIEW_USERS);
+        viewUsers.addCompositeRole(queryUsers);
+        viewUsers.addCompositeRole(queryGroups);
+    }
+
 
     public String getRealmAdminClientId(RealmModel realm) {
         return Constants.REALM_MANAGEMENT_CLIENT_ID;
@@ -213,6 +224,7 @@ public class RealmManager {
 
         // brute force
         realm.setBruteForceProtected(false); // default settings off for now todo set it on
+        realm.setPermanentLockout(false);
         realm.setMaxFailureWaitSeconds(900);
         realm.setMinimumQuickLoginWaitSeconds(60);
         realm.setWaitIncrementSeconds(60);
@@ -224,8 +236,6 @@ public class RealmManager {
         realm.setLoginWithEmailAllowed(true);
 
         realm.setEventsListeners(Collections.singleton("jboss-logging"));
-
-        realm.setPasswordPolicy(PasswordPolicy.parse(session, "hashIterations(20000)"));
     }
 
     public boolean removeRealm(RealmModel realm) {
@@ -245,6 +255,11 @@ public class RealmManager {
             UserSessionPersisterProvider sessionsPersister = session.getProvider(UserSessionPersisterProvider.class);
             if (sessionsPersister != null) {
                 sessionsPersister.onRealmRemoved(realm);
+            }
+
+            AuthenticationSessionProvider authSessions = session.authenticationSessions();
+            if (authSessions != null) {
+                authSessions.onRealmRemoved(realm);
             }
 
           // Refresh periodic sync tasks for configured storageProviders
@@ -320,6 +335,7 @@ public class RealmManager {
             role.setScopeParamRequired(false);
             adminRole.addCompositeRole(role);
         }
+        addQueryCompositeRoles(realmAdminApp);
     }
 
     private void checkMasterAdminManagementRoles(RealmModel realm) {
@@ -333,6 +349,7 @@ public class RealmManager {
                 addAndSetAdminRole(r, masterAdminClient, adminRole);
             }
         }
+        addQueryCompositeRoles(masterAdminClient);
     }
 
 
@@ -355,6 +372,7 @@ public class RealmManager {
         for (String r : AdminRoles.ALL_REALM_ROLES) {
             addAndSetAdminRole(r, realmAdminClient, adminRole);
         }
+        addQueryCompositeRoles(realmAdminClient);
     }
 
     private void addAndSetAdminRole(String roleName, ClientModel parentClient, RoleModel parentRole) {
@@ -378,6 +396,7 @@ public class RealmManager {
                 addAndSetAdminRole(r, realmAdminClient, adminRole);
             }
         }
+        addQueryCompositeRoles(realmAdminClient);
     }
 
 
@@ -495,7 +514,8 @@ public class RealmManager {
         // I need to postpone impersonation because it needs "realm-management" client and its roles set
         if (postponeImpersonationSetup) {
             setupImpersonationService(realm);
-        }
+            String realmAdminClientId = getRealmAdminClientId(realm);
+         }
 
         if (postponeAdminCliSetup) {
             setupAdminCli(realm);
